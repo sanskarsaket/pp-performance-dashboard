@@ -1,0 +1,7 @@
+{
+  "files": [
+    { "path": "leads_2026-08-20.csv", "kind": "leads" },
+    { "path": "google_2026-08-20.csv", "kind": "spend", "platform": "Google" },
+    { "path": "meta_2026-08-20.csv", "kind": "spend", "platform": "Meta" }
+  ]
+}
