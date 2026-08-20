@@ -67,21 +67,39 @@
   }
 
   function renderSlot(kind) {
-    const dz = $(`#dz-${kind}`);
+    const wrap = document.querySelector(`.uploadslot[data-slot="${kind}"]`);
     const fl = $(`#fl-${kind}`);
     const f = S.slots[kind];
-    if (!f) { dz.hidden = false; fl.innerHTML = ''; return; }
-    dz.hidden = true;
-    fl.innerHTML = `<div class="frow">
-        <div>
-          <div class="fname">${esc(f.name)}</div>
-          <div class="fmeta">${(f.size / 1024).toFixed(0)} KB</div>
+    if (!f) {
+      if (wrap) wrap.classList.remove('is-filled');
+      fl.innerHTML = '';
+      updateSlotSummary();
+      return;
+    }
+    if (wrap) wrap.classList.add('is-filled');
+    fl.innerHTML = `<div class="slot-confirm">
+        <span class="tick">✓</span>
+        <div class="sinfo">
+          <div class="sname">${esc(f.name)}</div>
+          <div class="smeta">${(f.size / 1024).toFixed(0)} KB · loaded, ready to apply</div>
         </div>
       </div>`;
+    const tick = fl.querySelector('.slot-confirm');
     const rm = document.createElement('button');
     rm.className = 'rm'; rm.innerHTML = '×'; rm.title = 'Remove';
+    rm.style.marginLeft = 'auto';
     rm.onclick = () => { S.slots[kind] = null; renderSlot(kind); };
-    fl.querySelector('.frow').appendChild(rm);
+    tick.appendChild(rm);
+    updateSlotSummary();
+  }
+
+  function updateSlotSummary() {
+    const el = $('#slotSummary');
+    if (!el) return;
+    const filled = Object.values(S.slots).filter(Boolean).length;
+    el.textContent = filled === 0
+      ? 'No files added yet.'
+      : `${filled} of 3 file${filled === 1 ? '' : 's'} loaded — hit Apply to load ${filled === 1 ? 'it' : 'them'} into the dashboard.`;
   }
 
   function clearSlots() {
@@ -863,12 +881,15 @@
 
     Object.keys(S.slots).forEach(kind => {
       const dz = $(`#dz-${kind}`);
-      const input = dz.querySelector('.slotInput');
+      const input = $(`#input-${kind}`);
+      const btn = $(`#btn-${kind}`);
+      btn.onclick = () => input.click();
       input.onchange = e => { setSlotFile(kind, e.target.files[0]); e.target.value = ''; };
       ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
       ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
       dz.addEventListener('drop', e => setSlotFile(kind, e.dataTransfer.files[0]));
     });
+    updateSlotSummary();
     window.addEventListener('dragover', e => e.preventDefault());
     window.addEventListener('drop', e => {
       e.preventDefault();
