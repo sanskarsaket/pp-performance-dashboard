@@ -346,13 +346,46 @@
       <h2>Upload daily files</h2>
       <button class="iconbtn" id="closeUpload" aria-label="Close">×</button>
     </div>
-    <div class="dropzone" id="dropzone">
-      <p><b>Drop the CSV files here</b> or <label class="linkbtn">browse<input type="file" id="fileInput" multiple accept=".csv,.tsv,.txt,.json" hidden /></label></p>
-      <span>Lead dumps and day-wise spend exports are detected automatically. UTF-16 tab-separated Google/Meta exports are supported as-is.</span>
+
+    <div class="uploadslots" id="uploadSlots">
+
+      <div class="uploadslot" data-slot="leads">
+        <div class="uploadslot-head">
+          <label>CRM lead dump</label>
+          <span class="cardnote">leads_YYYY-MM-DD.csv</span>
+        </div>
+        <div class="dropzone dropzone-sm" id="dz-leads">
+          <p><b>Drop the file here</b> or <label class="linkbtn">browse<input type="file" class="slotInput" data-slot="leads" accept=".csv,.tsv,.txt" hidden /></label></p>
+        </div>
+        <div class="filelist" id="fl-leads"></div>
+      </div>
+
+      <div class="uploadslot" data-slot="google">
+        <div class="uploadslot-head">
+          <label>Google Ads spend</label>
+          <span class="cardnote">Day-wise spend export</span>
+        </div>
+        <div class="dropzone dropzone-sm" id="dz-google">
+          <p><b>Drop the file here</b> or <label class="linkbtn">browse<input type="file" class="slotInput" data-slot="google" accept=".csv,.tsv,.txt" hidden /></label></p>
+        </div>
+        <div class="filelist" id="fl-google"></div>
+      </div>
+
+      <div class="uploadslot" data-slot="meta">
+        <div class="uploadslot-head">
+          <label>Meta Ads spend</label>
+          <span class="cardnote">Day-wise spend export</span>
+        </div>
+        <div class="dropzone dropzone-sm" id="dz-meta">
+          <p><b>Drop the file here</b> or <label class="linkbtn">browse<input type="file" class="slotInput" data-slot="meta" accept=".csv,.tsv,.txt" hidden /></label></p>
+        </div>
+        <div class="filelist" id="fl-meta"></div>
+      </div>
+
     </div>
-    <div class="filelist" id="fileList"></div>
+
     <div class="modalfoot">
-      <span class="modalnote">Spend files look identical across platforms, so set the platform on each one before applying.</span>
+      <span class="modalnote">Each file goes straight into its own box, so there's nothing to mislabel. UTF-16 tab-separated Google/Meta exports are supported as-is.</span>
       <div>
         <button class="btn btn-ghost" id="clearAll">Clear all</button>
         <button class="btn btn-primary" id="applyFiles">Apply</button>
@@ -360,6 +393,16 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Compact per-file upload slots — scoped overrides, doesn't touch style.css */
+  .uploadslots { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 6px; }
+  .uploadslot-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .uploadslot-head label { font-weight: 600; text-transform: none; letter-spacing: normal; }
+  .dropzone-sm { padding: 16px 18px; min-height: 0; }
+  .dropzone-sm p { margin: 0; font-size: 0.92rem; }
+  .uploadslot .filelist { margin-top: 6px; }
+</style>
 
 <div class="toast" id="toast" hidden></div>
 
