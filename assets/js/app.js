@@ -20,7 +20,7 @@
     granularity: 'day',
     metrics: ['spend', 'leads'],
     dataTab: 'daily',
-    staged: []   // files waiting in the upload modal
+    slots: { leads: null, google: null, meta: null }   // one file per upload box
   };
   window.PPSTATE = S;
 
@@ -47,75 +47,57 @@
 
   /* ---------------- upload flow ---------------- */
 
-  function stageFiles(fileList) {
-    const files = [...fileList];
-    if (!files.length) return;
-    Promise.all(files.map(async f => {
-      const text = await PP.readFile(f);
-      const kind = f.name.toLowerCase().endsWith('.json') ? 'session' : PP.detectKind(text);
-      let platform = 'Google';
-      const n = f.name.toLowerCase();
-      if (/meta|fb|facebook|insta/.test(n)) platform = 'Meta';
-      else if (/google|gads|adwords|search/.test(n)) platform = 'Google';
-      else platform = S.staged.filter(s => s.kind === 'spend').length === 0 ? 'Google' : 'Meta';
-      return { name: f.name, size: f.size, text, kind, platform };
-    })).then(items => {
-      S.staged.push(...items);
-      renderFileList();
+  // Each upload box is locked to one kind/platform, so there's no dropdown
+  // to mis-set and no ambiguity between the two identical-looking spend exports.
+  const SLOT_META = {
+    leads: { label: 'CRM lead dump', badKind: 'spend', badMsg: f => `${f} looks like a spend export — drop it in the Google or Meta box instead.` },
+    google: { label: 'Google Ads spend', platform: 'Google', badKind: 'leads', badMsg: f => `${f} looks like a CRM lead dump — drop it in the CRM box instead.` },
+    meta: { label: 'Meta Ads spend', platform: 'Meta', badKind: 'leads', badMsg: f => `${f} looks like a CRM lead dump — drop it in the CRM box instead.` }
+  };
+
+  function setSlotFile(kind, file) {
+    if (!file) return;
+    PP.readFile(file).then(text => {
+      const detected = PP.detectKind(text);
+      const meta = SLOT_META[kind];
+      if (detected === meta.badKind) { toast(meta.badMsg(file.name)); return; }
+      S.slots[kind] = { name: file.name, size: file.size, text };
+      renderSlot(kind);
     }).catch(e => toast(e.message));
   }
 
-  function renderFileList() {
-    const wrap = $('#fileList');
-    wrap.innerHTML = '';
-    S.staged.forEach((f, i) => {
-      const row = document.createElement('div');
-      row.className = 'frow';
-      const label = f.kind === 'leads' ? 'CRM lead dump' : f.kind === 'spend' ? 'Day-wise spend' : f.kind === 'session' ? 'Saved session' : 'Unrecognised';
-      row.innerHTML = `<div>
+  function renderSlot(kind) {
+    const dz = $(`#dz-${kind}`);
+    const fl = $(`#fl-${kind}`);
+    const f = S.slots[kind];
+    if (!f) { dz.hidden = false; fl.innerHTML = ''; return; }
+    dz.hidden = true;
+    fl.innerHTML = `<div class="frow">
+        <div>
           <div class="fname">${esc(f.name)}</div>
-          <div class="fmeta">${label} · ${(f.size / 1024).toFixed(0)} KB</div>
-        </div>`;
-      if (f.kind === 'spend') {
-        const sel = document.createElement('select');
-        ['Google', 'Meta', 'Other'].forEach(p => {
-          const o = document.createElement('option');
-          o.value = p; o.textContent = p + ' Ads';
-          if (p === f.platform) o.selected = true;
-          sel.appendChild(o);
-        });
-        sel.onchange = () => { f.platform = sel.value; };
-        row.appendChild(sel);
-      }
-      const rm = document.createElement('button');
-      rm.className = 'rm'; rm.innerHTML = '×'; rm.title = 'Remove';
-      rm.onclick = () => { S.staged.splice(i, 1); renderFileList(); };
-      if (f.kind !== 'spend') row.appendChild(Object.assign(document.createElement('span'), { style: 'margin-left:auto' }));
-      row.appendChild(rm);
-      wrap.appendChild(row);
-    });
+          <div class="fmeta">${(f.size / 1024).toFixed(0)} KB</div>
+        </div>
+      </div>`;
+    const rm = document.createElement('button');
+    rm.className = 'rm'; rm.innerHTML = '×'; rm.title = 'Remove';
+    rm.onclick = () => { S.slots[kind] = null; renderSlot(kind); };
+    fl.querySelector('.frow').appendChild(rm);
   }
 
-  function applyStaged() {
-    if (!S.staged.length) { toast('No files staged'); return; }
+  function clearSlots() {
+    Object.keys(S.slots).forEach(k => { S.slots[k] = null; renderSlot(k); });
+  }
+
+  function applySlots() {
+    const hasAny = S.slots.leads || S.slots.google || S.slots.meta;
+    if (!hasAny) { toast('No files added yet'); return; }
     let addedLeads = 0, addedSpend = 0;
-    S.staged.forEach(f => {
-      try {
-        if (f.kind === 'leads') {
-          const rows = PP.parseLeads(f.text, f.name);
-          addedLeads += mergeLeads(rows);
-        } else if (f.kind === 'spend') {
-          const rows = PP.parseSpend(f.text, f.platform, f.name);
-          addedSpend += mergeSpend(rows);
-        } else if (f.kind === 'session') {
-          const j = PP.parseSession(f.text);
-          addedLeads += mergeLeads(j.leads);
-          addedSpend += mergeSpend(j.spend);
-        }
-      } catch (e) { toast(`${f.name}: ${e.message}`); }
-    });
-    S.staged = [];
-    renderFileList();
+    try {
+      if (S.slots.leads) addedLeads += mergeLeads(PP.parseLeads(S.slots.leads.text, S.slots.leads.name));
+      if (S.slots.google) addedSpend += mergeSpend(PP.parseSpend(S.slots.google.text, 'Google', S.slots.google.name));
+      if (S.slots.meta) addedSpend += mergeSpend(PP.parseSpend(S.slots.meta.text, 'Meta', S.slots.meta.name));
+    } catch (e) { toast(e.message); return; }
+    clearSlots();
     closeModal();
     rebuildFilters();
     render();
@@ -876,19 +858,22 @@
     $('#openUpload2').onclick = openModal;
     $('#closeUpload').onclick = closeModal;
     $('#uploadModal').addEventListener('click', e => { if (e.target.id === 'uploadModal') closeModal(); });
-    $('#applyFiles').onclick = applyStaged;
-    $('#clearAll').onclick = () => { S.staged = []; renderFileList(); };
-    $('#fileInput').onchange = e => stageFiles(e.target.files);
+    $('#applyFiles').onclick = applySlots;
+    $('#clearAll').onclick = clearSlots;
 
-    const dz = $('#dropzone');
-    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
-    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
-    dz.addEventListener('drop', e => stageFiles(e.dataTransfer.files));
+    Object.keys(S.slots).forEach(kind => {
+      const dz = $(`#dz-${kind}`);
+      const input = dz.querySelector('.slotInput');
+      input.onchange = e => { setSlotFile(kind, e.target.files[0]); e.target.value = ''; };
+      ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('over'); }));
+      ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('over'); }));
+      dz.addEventListener('drop', e => setSlotFile(kind, e.dataTransfer.files[0]));
+    });
     window.addEventListener('dragover', e => e.preventDefault());
     window.addEventListener('drop', e => {
       e.preventDefault();
-      if (e.target.closest('#dropzone')) return;
-      openModal(); stageFiles(e.dataTransfer.files);
+      if (e.target.closest('.dropzone')) return;
+      openModal();
     });
 
     $('#rangePreset').onchange = e => { S.filters.preset = e.target.value; render(); };
